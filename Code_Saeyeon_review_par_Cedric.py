@@ -33,8 +33,8 @@ for i in range(len(data)):
     b = subj_correlations.loc[subj_correlations['subject name'] == data.iloc[i, 0]]['sub_io_conf_int'].values[0]
     confidence_predicted = confidence_OI*a + b
     
-    subj_accuracies.iloc[i, subj_accuracies.columns.get_loc('accuracy_confidence')] = math.dist((confidence_OI, confidence_subject) ,(confidence_OI, confidence_predicted))    
-    
+    subj_accuracies.iloc[i, subj_accuracies.columns.get_loc('accuracy_confidence')] = math.dist((confidence_OI, confidence_subject) ,(confidence_OI, confidence_predicted)) 
+
       
 #compute correlations btw acc_estimation and acc_confidence
 subj_correlations_accuracies = pd.DataFrame(index=list_subject,
@@ -45,8 +45,7 @@ subj_correlations_accuracies['subject name'] = list_subject
 for subject in list_subject :
     subj_correlations_accuracies.loc[subject]['observed data'] = np.corrcoef(subj_accuracies.loc[subj_accuracies['subject name'] == subject]['accuracy_estimation'].astype(float),
                         subj_accuracies.loc[subj_accuracies['subject name'] == subject]['accuracy_confidence'].astype(float))[0, 1]
-    print(np.corrcoef(subj_accuracies.loc[subj_accuracies['subject name'] == subject]['accuracy_estimation'].astype(float),
-                        subj_accuracies.loc[subj_accuracies['subject name'] == subject]['accuracy_confidence'].astype(float))[0, 1])
+
     
             
 '''shuffling keeping pairs and full shuffling  '''          
@@ -58,34 +57,36 @@ for subject in list_subject :
     subj_conf = data.loc[data['subject'] == subject]['sub_conf'].array
               
     #at each trial, compute the estimates given by the subject and by the IO (for probabilty estimates and confidence reports) 
-    array_pred = np.empty((0, 2), float) # 2D-array for the probability estimates: subject and IO   
-    array_conf = np.empty((0, 2), float) # 2D-array for the confidence reports: subjet and IO 
+    array_subject = np.empty((0, 2), float) # 2D-array for the proba estimates and confidence reports of the subject
+    array_IO = np.empty((0, 2), float) # 2D-array for the proba estimates and confidence reports of the IO 
     
     indices = len(subj_pred)  # indices is the number of trials for a given subject 
     
     for i in range(indices):
-        array_pred = np.append(array_pred, np.array([[subj_pred[i], io_pred[i]]]), axis=0)
-        array_conf = np.append(array_conf, np.array([[subj_conf[i], io_conf[i]]]), axis=0)
-
+        array_subject = np.append(array_subject, np.array([[subj_pred[i], subj_conf[i]]]), axis=0)
+        array_IO = np.append(array_IO, np.array([[io_pred[i], io_conf[i]]]), axis=0)
+    
 
     #shuffing (ie permutation) keeping pairs
-    array_pred_shuffled = np.random.permutation(array_pred) # 2D-array (subject probability estimate, IO probability estimate)
-    array_conf_shuffled = np.random.permutation(array_conf) # 2D-array (subject confidence report, IO confidence report)
+    array_subject_shuffled = np.random.permutation(array_subject) # 2D-array of the subject (proba estimate, conf report)
+    array_IO_shuffled = np.random.permutation(array_IO) # 2D-array of the IO (proba estimate, conf report)
+    print('array_subject_shuffled',  array_subject_shuffled)
+    print('array_IO_shuffled', array_IO_shuffled)
     
     #compute the new accuracies after shuffling keeping pairs 
     acc_pred = []
     acc_conf = []
+      
+    a, b, r, p_value, std_err = linregress (pd.DataFrame(array_IO_shuffled)[1], pd.DataFrame(array_subject_shuffled)[1])
     
-    df_conf = pd.DataFrame(array_conf_shuffled)    
-    a, b, r, p_value, std_err = linregress(df_conf[1]#IO
-                                               , df_conf[0])
+    
     for j in range(indices) :
-        acc_pred.append(abs(array_pred_shuffled[j][0] - array_pred_shuffled[j][1]))
+        acc_pred.append(abs(array_subject_shuffled[j][0] - array_IO_shuffled[j][0]))
         
         #computing accuracy for confidence: a is the slope and b is the intercept of the reg of subjective confidences on IO confidences 
-        confidence_predicted = array_conf_shuffled[j][1]*a + b
+        confidence_predicted = array_IO_shuffled[j][1]*a + b
     
-        acc_conf.append(math.dist((array_conf_shuffled[j][1], array_conf_shuffled[j][0]),(array_conf_shuffled[j][1], confidence_predicted)))
+        acc_conf.append(math.dist((array_IO_shuffled[j][1], array_subject_shuffled[j][1]),(array_IO_shuffled[j][1], confidence_predicted)))
             
     
     #full shuffling (ie full permutation)
@@ -115,39 +116,34 @@ for subject in list_subject :
     
 '''plot error bars'''
 
-subj_correlations_accuracies2 = subj_correlations_accuracies.filter(like='PCB2015', axis=0)
+#subj_correlations_accuracies2 = subj_correlations_accuracies.filter(like='PCB2015', axis=0)
 
 fig, ax = plt.subplots(1, 1, figsize=(4, 4))
 x=np.array(['Observed data', 'Shuffling \n keeping pairs', 'Full shuffling'])
-y=np.array([subj_correlations_accuracies2.mean()['observed data'], subj_correlations_accuracies2.mean()['shuffling keeping pairs'], subj_correlations_accuracies2.mean()['full shuffling']])
-yerr = np.array([subj_correlations_accuracies2.sem()['observed data'],subj_correlations_accuracies2.sem()['shuffling keeping pairs'], subj_correlations_accuracies2.sem()['full shuffling']])
+y=np.array([subj_correlations_accuracies.mean()['observed data'], subj_correlations_accuracies.mean()['shuffling keeping pairs'], subj_correlations_accuracies.mean()['full shuffling']])
+yerr = np.array([subj_correlations_accuracies.sem()['observed data'],subj_correlations_accuracies.sem()['shuffling keeping pairs'], subj_correlations_accuracies.sem()['full shuffling']])
 ax.errorbar(x,y,yerr=yerr,
                  fmt='o', capsize=8,
                  markersize=8,
                  color="black",
                  zorder=2)
 
-
-
-
-'''TEST STAT'''
-
-import scipy 
+'''t-tests on two related samples''' 
 
 paired_ttest_pred1 = scipy.stats.ttest_rel(subj_correlations_accuracies['observed data'],
                                            subj_correlations_accuracies['shuffling keeping pairs'], 
-                                     axis = 0)
+                                     axis = 0, alternative = 'less')
 
-print('ttest_obsdata_sufflepairs', paired_ttest_pred1, '\n')
+print('t test observed data and shuffling keeping pairs : ', paired_ttest_pred1, '\n')
 
 paired_ttest_pred2 = scipy.stats.ttest_rel(subj_correlations_accuracies['shuffling keeping pairs'],
                                            subj_correlations_accuracies['full shuffling'], 
-                                     axis = 0)
+                                     axis = 0, alternative = 'less')
 
-print('ttest_shufflepairs_fullshuffle', paired_ttest_pred2, '\n')
+print('t test shuffling keeping pairs and ful shuffling : ', paired_ttest_pred2, '\n')
 
 paired_ttest_pred3 = scipy.stats.ttest_rel(subj_correlations_accuracies['observed data'],
                                            subj_correlations_accuracies['full shuffling'], 
-                                     axis = 0)
+                                     axis = 0, alternative = 'less')
 
-print('ttest_obsdata_fullshuffle', paired_ttest_pred3, '\n')
+print('t test shuffling keeping pairs and full shuffling : ', paired_ttest_pred3, '\n')
